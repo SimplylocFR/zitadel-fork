@@ -27,10 +27,14 @@ const nextConfig = {
   basePath: process.env.NEXT_PUBLIC_BASE_PATH,
   output: process.env.NEXT_OUTPUT_MODE || undefined,
   reactStrictMode: true,
+  typescript: {
+    // Since Next.js 16.3 the build type-checks every file matched by tsconfig.json,
+    // including unit tests, which vitest runs without type-checking.
+    tsconfigPath: "tsconfig.build.json",
+  },
   experimental: {
     // Add React 19 compatibility optimizations
     optimizePackageImports: ["@radix-ui/react-tooltip", "@heroicons/react"],
-    useCache: true,
     serverActions: {
       ...(process.env.SERVER_ACTION_ALLOWED_ORIGINS
         ? { allowedOrigins: process.env.SERVER_ACTION_ALLOWED_ORIGINS.split(",").map((o) => o.trim()) }

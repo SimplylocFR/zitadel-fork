@@ -62,6 +62,16 @@ func (s *Server) codeExchangeV1(ctx context.Context, client *Client, req *oidc.A
 		return nil, err
 	}
 
+	if authReq.GetClientID() != client.client.ClientID {
+		return nil, oidc.ErrInvalidClient().WithDescription("client_id does not correspond to the client_id in the authorization request")
+	}
+	if !authReq.Done() {
+		return nil, oidc.ErrInvalidGrant().WithDescription("user is not authenticated")
+	}
+	if !authReq.CodeIssuedToCurrentUser() {
+		return nil, oidc.ErrInvalidGrant().WithDescription("user changed after the code was issued")
+	}
+
 	if challenge := authReq.GetCodeChallenge(); challenge != nil || client.AuthMethod() == oidc.AuthMethodNone {
 		if err = op.AuthorizeCodeChallenge(req.CodeVerifier, challenge); err != nil {
 			return nil, err
@@ -121,6 +131,9 @@ func (s *Server) getAuthRequestV1ByID(ctx context.Context, id string) (*AuthRequ
 
 func codeExchangeComplianceChecker(client *Client, req *oidc.AccessTokenRequest) command.AuthRequestComplianceChecker {
 	return func(ctx context.Context, authReq *command.AuthRequestWriteModel) error {
+		if authReq.ClientID != client.client.ClientID {
+			return oidc.ErrInvalidClient().WithDescription("client_id does not correspond to the client_id in the authorization request")
+		}
 		if authReq.CodeChallenge != nil || client.AuthMethod() == oidc.AuthMethodNone {
 			err := op.AuthorizeCodeChallenge(req.CodeVerifier, CodeChallengeToOIDC(authReq.CodeChallenge))
 			if err != nil {

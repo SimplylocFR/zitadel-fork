@@ -1,7 +1,7 @@
 "use client";
 
+import { registerUser } from "@/lib/actions/register";
 import { handleServerActionResponse } from "@/lib/client-utils";
-import { registerUser } from "@/lib/server/register";
 import { LegalAndSupportSettings } from "@zitadel/proto/zitadel/settings/v2/legal_settings_pb";
 import { LoginSettings, PasskeysType } from "@zitadel/proto/zitadel/settings/v2/login_settings_pb";
 import { useTranslations } from "next-intl";
@@ -51,7 +51,7 @@ export function RegisterForm({
     mode: "onChange",
     defaultValues: {
       email: email ?? "",
-      firstName: firstname ?? "",
+      firstname: firstname ?? "",
       lastname: lastname ?? "",
     },
   });

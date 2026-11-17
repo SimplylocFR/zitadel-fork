@@ -47,6 +47,27 @@ func NewRemoveUsernameUniqueConstraint(userName, resourceOwner string, userLogin
 		uniqueUserName)
 }
 
+// UsernameChange is a username rewrite keyed by the owning user so owner tags stay intact.
+type UsernameChange struct {
+	Username string
+	UserID   string
+}
+
+func usernameOwnerTags(agg *eventstore.Aggregate) []string {
+	return []string{
+		eventstore.OwnerTag(eventstore.UniqueConstraintOwnerOrg, agg.ResourceOwner),
+		eventstore.OwnerTag(eventstore.UniqueConstraintOwnerUser, agg.ID),
+	}
+}
+
+func idpLinkOwnerTags(agg *eventstore.Aggregate, idpConfigID string) []string {
+	return []string{
+		eventstore.OwnerTag(eventstore.UniqueConstraintOwnerOrg, agg.ResourceOwner),
+		eventstore.OwnerTag(eventstore.UniqueConstraintOwnerIDP, idpConfigID),
+		eventstore.OwnerTag(eventstore.UniqueConstraintOwnerUser, agg.ID),
+	}
+}
+
 type UserLockedEvent struct {
 	eventstore.BaseEvent `json:"-"`
 }
@@ -165,6 +186,7 @@ type UserRemovedEvent struct {
 	userName          string
 	externalIDPs      []*domain.UserIDPLink
 	loginMustBeDomain bool
+	removeByOwner     bool
 }
 
 func (e *UserRemovedEvent) Payload() interface{} {
@@ -172,7 +194,12 @@ func (e *UserRemovedEvent) Payload() interface{} {
 }
 
 func (e *UserRemovedEvent) UniqueConstraints() []*eventstore.UniqueConstraint {
-	events := make([]*eventstore.UniqueConstraint, 0)
+	if e.removeByOwner {
+		return []*eventstore.UniqueConstraint{
+			eventstore.NewRemoveUniqueConstraintsByOwner(eventstore.UniqueConstraintOwnerUser, e.Aggregate().ID),
+		}
+	}
+	events := make([]*eventstore.UniqueConstraint, 0, 1+len(e.externalIDPs))
 	if e.userName != "" {
 		events = append(events, NewRemoveUsernameUniqueConstraint(e.userName, e.Aggregate().ResourceOwner, e.loginMustBeDomain))
 	}
@@ -199,6 +226,15 @@ func NewUserRemovedEvent(
 		externalIDPs:      externalIDPs,
 		loginMustBeDomain: userLoginMustBeDomain,
 	}
+}
+
+func NewUserRemovedByOwnerEvent(
+	ctx context.Context,
+	aggregate *eventstore.Aggregate,
+) *UserRemovedEvent {
+	removed := NewUserRemovedEvent(ctx, aggregate, "", nil, false)
+	removed.removeByOwner = true
+	return removed
 }
 
 func UserRemovedEventMapper(event eventstore.Event) (eventstore.Event, error) {
@@ -373,7 +409,7 @@ func (e *DomainClaimedEvent) Payload() interface{} {
 func (e *DomainClaimedEvent) UniqueConstraints() []*eventstore.UniqueConstraint {
 	return []*eventstore.UniqueConstraint{
 		NewRemoveUsernameUniqueConstraint(e.oldUserName, e.Aggregate().ResourceOwner, e.userLoginMustBeDomain),
-		NewAddUsernameUniqueConstraint(e.UserName, e.Aggregate().ResourceOwner, e.userLoginMustBeDomain),
+		NewAddUsernameUniqueConstraint(e.UserName, e.Aggregate().ResourceOwner, e.userLoginMustBeDomain).WithOwners(usernameOwnerTags(e.Aggregate())...),
 	}
 }
 
@@ -396,7 +432,7 @@ func NewDomainClaimedEvent(
 			UserDomainClaimedType,
 		),
 		UserName:              userName,
-		URLTemplate:       urlTemplate,
+		URLTemplate:           urlTemplate,
 		oldUserName:           oldUserName,
 		userLoginMustBeDomain: userLoginMustBeDomain,
 		TriggeredAtOrigin:     http.DomainContext(ctx).Origin(),
@@ -462,7 +498,7 @@ func (e *UsernameChangedEvent) Payload() interface{} {
 func (e *UsernameChangedEvent) UniqueConstraints() []*eventstore.UniqueConstraint {
 	return []*eventstore.UniqueConstraint{
 		NewRemoveUsernameUniqueConstraint(e.oldUserName, e.Aggregate().ResourceOwner, e.oldUserLoginMustBeDomain),
-		NewAddUsernameUniqueConstraint(e.UserName, e.Aggregate().ResourceOwner, e.userLoginMustBeDomain),
+		NewAddUsernameUniqueConstraint(e.UserName, e.Aggregate().ResourceOwner, e.userLoginMustBeDomain).WithOwners(usernameOwnerTags(e.Aggregate())...),
 	}
 }
 

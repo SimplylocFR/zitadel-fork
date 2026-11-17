@@ -364,10 +364,11 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 		checkPermission domain.PermissionCheck
 	}
 	type args struct {
-		ctx          context.Context
-		deviceCode   string
-		sessionID    string
-		sessionToken string
+		ctx                    context.Context
+		deviceCode             string
+		sessionID              string
+		sessionToken           string
+		projectPermissionCheck domain.ProjectPermissionCheck
 	}
 	tests := []struct {
 		name        string
@@ -388,6 +389,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"notfound",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantErr: zerrors.ThrowNotFound(nil, "COMMAND-D2hf2", "Errors.DeviceAuth.NotFound"),
 		},
@@ -421,6 +423,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantErr: zerrors.ThrowPreconditionFailed(nil, "COMMAND-D30Jf", "Errors.DeviceAuth.AlreadyHandled"),
 		},
@@ -446,6 +449,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantErr: zerrors.ThrowPermissionDenied(nil, "AUTHZ-HKJD33", "Errors.PermissionDenied"),
 		},
@@ -472,6 +476,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantErr: zerrors.ThrowPreconditionFailed(nil, "COMMAND-Flk38", "Errors.Session.NotExisting"),
 		},
@@ -509,6 +514,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"invalidToken",
+				nil,
 			},
 			wantErr: zerrors.ThrowPermissionDenied(nil, "COMMAND-sGr42", "Errors.Session.Token.Invalid"),
 		},
@@ -560,6 +566,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantErr: zerrors.ThrowPreconditionFailed(nil, "COMMAND-D2j34", "Errors.User.NotAllowedOrg"),
 		},
@@ -624,6 +631,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantErr: pushErr,
 		},
@@ -688,6 +696,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
 			},
 			wantDetails: &domain.ObjectDetails{
 				ResourceOwner: "instance1",
@@ -754,6 +763,126 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				"deviceCode",
 				"sessionID",
 				"sessionToken",
+				nil,
+			},
+			wantDetails: &domain.ObjectDetails{
+				ResourceOwner: "instance1",
+			},
+		},
+		{
+			name: "project permission denied, error",
+			fields: fields{
+				eventstore: expectEventstore(
+					expectFilter(eventFromEventPusherWithInstanceID(
+						"instance1",
+						deviceauth.NewAddedEvent(
+							ctx,
+							deviceauth.NewAggregate("deviceCode", "instance1"),
+							"client_id", "deviceCode", "456", now,
+							[]string{"a", "b", "c"},
+							[]string{"projectID", "clientID"}, true, "",
+						),
+					)),
+					expectFilter(
+						eventFromEventPusher(
+							session.NewAddedEvent(ctx,
+								&session.NewAggregate("sessionID", "instance1").Aggregate,
+								&domain.UserAgent{
+									FingerprintID: gu.Ptr("fp1"),
+									IP:            net.ParseIP("1.2.3.4"),
+									Description:   gu.Ptr("firefox"),
+									Header:        http.Header{"foo": []string{"bar"}},
+								},
+							),
+						),
+						eventFromEventPusher(
+							session.NewUserCheckedEvent(ctx, &session.NewAggregate("sessionID", "instance1").Aggregate,
+								"userID", "orgID", testNow, &language.Afrikaans),
+						),
+						eventFromEventPusher(
+							session.NewPasswordCheckedEvent(ctx, &session.NewAggregate("sessionID", "instance1").Aggregate,
+								testNow),
+						),
+						eventFromEventPusherWithCreationDateNow(
+							session.NewLifetimeSetEvent(ctx, &session.NewAggregate("sessionID", "instance1").Aggregate,
+								2*time.Minute),
+						),
+					),
+				),
+				tokenVerifier:   newMockTokenVerifierValid(),
+				checkPermission: newMockPermissionCheckAllowed(),
+			},
+			args: args{
+				ctx,
+				"deviceCode",
+				"sessionID",
+				"sessionToken",
+				newMockProjectPermissionCheckOIDCNotAllowed(),
+			},
+			wantErr: zerrors.ThrowPermissionDenied(nil, "OIDC-foSyH49RvL", "Errors.PermissionDenied"),
+		},
+		{
+			name: "project permission check passes",
+			fields: fields{
+				eventstore: expectEventstore(
+					expectFilter(eventFromEventPusherWithInstanceID(
+						"instance1",
+						deviceauth.NewAddedEvent(
+							ctx,
+							deviceauth.NewAggregate("deviceCode", "instance1"),
+							"client_id", "deviceCode", "456", now,
+							[]string{"a", "b", "c"},
+							[]string{"projectID", "clientID"}, true, "",
+						),
+					)),
+					expectFilter(
+						eventFromEventPusher(
+							session.NewAddedEvent(ctx,
+								&session.NewAggregate("sessionID", "instance1").Aggregate,
+								&domain.UserAgent{
+									FingerprintID: gu.Ptr("fp1"),
+									IP:            net.ParseIP("1.2.3.4"),
+									Description:   gu.Ptr("firefox"),
+									Header:        http.Header{"foo": []string{"bar"}},
+								},
+							),
+						),
+						eventFromEventPusher(
+							session.NewUserCheckedEvent(ctx, &session.NewAggregate("sessionID", "instance1").Aggregate,
+								"userID", "orgID", testNow, &language.Afrikaans),
+						),
+						eventFromEventPusher(
+							session.NewPasswordCheckedEvent(ctx, &session.NewAggregate("sessionID", "instance1").Aggregate,
+								testNow),
+						),
+						eventFromEventPusherWithCreationDateNow(
+							session.NewLifetimeSetEvent(ctx, &session.NewAggregate("sessionID", "instance1").Aggregate,
+								2*time.Minute),
+						),
+					),
+					expectPush(
+						deviceauth.NewApprovedEvent(
+							ctx, deviceauth.NewAggregate("deviceCode", "instance1"), "userID", "orgID",
+							[]domain.UserAuthMethodType{domain.UserAuthMethodTypePassword},
+							testNow, &language.Afrikaans, &domain.UserAgent{
+								FingerprintID: gu.Ptr("fp1"),
+								IP:            net.ParseIP("1.2.3.4"),
+								Description:   gu.Ptr("firefox"),
+								Header:        http.Header{"foo": []string{"bar"}},
+							},
+							"sessionID",
+						),
+					),
+				),
+				tokenVerifier:   newMockTokenVerifierValid(),
+				checkPermission: newMockPermissionCheckAllowed(),
+			},
+			args: args{
+				ctx,
+				"deviceCode",
+				"sessionID",
+				"sessionToken",
+				newMockProjectPermissionCheckAllowed(),
 			},
 			wantDetails: &domain.ObjectDetails{
 				ResourceOwner: "instance1",
@@ -767,7 +896,7 @@ func TestCommands_ApproveDeviceAuthFromSession(t *testing.T) {
 				sessionTokenVerifier: tt.fields.tokenVerifier,
 				checkPermission:      tt.fields.checkPermission,
 			}
-			gotDetails, err := c.ApproveDeviceAuthWithSession(tt.args.ctx, tt.args.deviceCode, tt.args.sessionID, tt.args.sessionToken)
+			gotDetails, err := c.ApproveDeviceAuthWithSession(tt.args.ctx, tt.args.deviceCode, tt.args.sessionID, tt.args.sessionToken, tt.args.projectPermissionCheck)
 			require.ErrorIs(t, err, tt.wantErr)
 			assertObjectDetails(t, tt.wantDetails, gotDetails)
 		})
@@ -936,6 +1065,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 		ctx                  context.Context
 		deviceCode           string
 		backChannelLogoutURI string
+		clientID             string
 	}
 	tests := []struct {
 		name    string
@@ -954,6 +1084,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 			args: args{
 				ctx,
 				"device1",
+				"",
 				"",
 			},
 			wantErr: io.ErrClosedPipe,
@@ -980,6 +1111,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			wantErr: DeviceAuthStateError(domain.DeviceAuthStateInitiated),
 		},
@@ -993,6 +1125,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 			args: args{
 				ctx,
 				"123",
+				"",
 				"",
 			},
 			wantErr: zerrors.ThrowNotFound(nil, "COMMAND-ua1Vo", "Errors.DeviceAuth.NotFound"),
@@ -1023,6 +1156,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			wantErr: DeviceAuthStateError(domain.DeviceAuthStateExpired),
 		},
@@ -1055,6 +1189,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			wantErr: DeviceAuthStateError(domain.DeviceAuthStateExpired),
 		},
@@ -1087,6 +1222,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			wantErr: DeviceAuthStateError(domain.DeviceAuthStateDenied),
 		},
@@ -1125,6 +1261,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			wantErr: DeviceAuthStateError(domain.DeviceAuthStateDone),
 		},
@@ -1189,6 +1326,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			wantErr: zerrors.ThrowPreconditionFailed(nil, "OIDCS-kj3g2", "Errors.User.NotActive"),
 		},
@@ -1238,6 +1376,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 							false,
 						),
 					),
+					expectFilterActiveOrg("org1"),
 					expectFilter(), // token lifetime
 					expectPush(
 						oidcsession.NewAddedEvent(context.Background(), &oidcsession.NewAggregate("V2_oidcSessionID", "org1").Aggregate,
@@ -1268,6 +1407,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			want: &OIDCSession{
 				TokenID:           "V2_oidcSessionID-at_accessTokenID",
@@ -1335,6 +1475,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 							false,
 						),
 					),
+					expectFilterActiveOrg("org1"),
 					expectFilter(), // token lifetime
 					expectPush(
 						oidcsession.NewAddedEvent(context.Background(), &oidcsession.NewAggregate("V2_oidcSessionID", "org1").Aggregate,
@@ -1372,6 +1513,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"backChannelLogoutURI",
+				"clientID",
 			},
 			want: &OIDCSession{
 				TokenID:           "V2_oidcSessionID-at_accessTokenID",
@@ -1439,6 +1581,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 							false,
 						),
 					),
+					expectFilterActiveOrg("org1"),
 					expectFilter(), // token lifetime
 					expectPush(
 						oidcsession.NewAddedEvent(context.Background(), &oidcsession.NewAggregate("V2_oidcSessionID", "org1").Aggregate,
@@ -1472,6 +1615,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				ctx,
 				"123",
 				"",
+				"clientID",
 			},
 			want: &OIDCSession{
 				TokenID:           "V2_oidcSessionID-at_accessTokenID",
@@ -1506,7 +1650,7 @@ func TestCommands_CreateOIDCSessionFromDeviceAuth(t *testing.T) {
 				keyAlgorithm:                    tt.fields.keyAlgorithm,
 				authAlgorithm:                   &mockAuthCrypto{},
 			}
-			got, err := c.CreateOIDCSessionFromDeviceAuth(tt.args.ctx, tt.args.deviceCode, tt.args.backChannelLogoutURI)
+			got, err := c.CreateOIDCSessionFromDeviceAuth(tt.args.ctx, tt.args.deviceCode, tt.args.backChannelLogoutURI, tt.args.clientID)
 			c.jobs.Wait()
 
 			require.ErrorIs(t, err, tt.wantErr)
