@@ -330,19 +330,39 @@ export async function updateOrCreateSession(options: UpdateSessionCommand) {
 
     if (users.details?.totalResult === BigInt(1) && users.result[0].userId) {
       const user = users.result[0];
+      // Built field by field: spreading `checks` (already a message, so it carries `$typeName`) makes
+      // `create` keep the plain `user` object as is, and the request then fails to serialize.
       const newChecks = create(ChecksSchema, {
-        ...(checks || {}),
+        webAuthN: checks?.webAuthN,
+        totp: checks?.totp,
+        otpSms: checks?.otpSms,
+        otpEmail: checks?.otpEmail,
         user: { search: { case: "userId", value: user.userId } } as any,
       });
 
-      const result = await createSessionAndUpdateCookie({
-        checks: newChecks,
-        requestId,
-        lifetime,
-        challenges,
-      });
-      // @ts-ignore
-      session = { ...result.session, challenges: result.challenges };
+      try {
+        const result = await createSessionAndUpdateCookie({
+          checks: newChecks,
+          requestId,
+          lifetime,
+          challenges,
+        });
+        // @ts-ignore
+        session = { ...result.session, challenges: result.challenges };
+      } catch (retryError) {
+        if (!isClassifiedError(retryError) || !retryError.isUserError) {
+          throw retryError;
+        }
+        // ZITADEL rejected the checks (code that is wrong, expired or replaced by a newer one): report it
+        // to the user instead of failing the request with a server error.
+        logger.warn("Session update rejected (client error)", { grpcCode: retryError.code });
+        const isCodeCheck = !!(checks?.totp || checks?.otpEmail || checks?.otpSms);
+        if (isCodeCheck) {
+          const tOtp = await getTranslations("otp.errors");
+          return { error: tOtp("couldNotVerifyCode") };
+        }
+        return { error: t("couldNotUpdateSession") };
+      }
     } else {
       throw error;
     }

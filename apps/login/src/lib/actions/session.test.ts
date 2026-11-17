@@ -318,5 +318,46 @@ describe("server actions resolve the session from the caller's cookie", () => {
         /^https:\/\/test\.com\/ui\/v2\/login\/otp\/email\?/,
       );
     });
+
+    describe("when the session of the cookie cannot be updated", () => {
+      const otpEmail = { code: "12345678" };
+
+      beforeEach(async () => {
+        // the module mock of `create` is the identity: use the real one, the typing of the messages is what matters here
+        const { create } = await import("@zitadel/client");
+        const actual = await vi.importActual<typeof import("@zitadel/client")>("@zitadel/client");
+        vi.mocked(create).mockImplementation(actual.create as any);
+        cookieHelpers.setSessionAndUpdateCookie.mockRejectedValue(new Error("session gone"));
+        zitadel.listUsers.mockResolvedValue({ details: { totalResult: BigInt(1) }, result: [{ userId: "user-1" }] });
+      });
+
+      test("recreates the session with checks that are real messages and keeps the second factor", async () => {
+        cookieHelpers.createSessionAndUpdateCookie.mockResolvedValue({ session: { id: "session-2", factors: {} } });
+
+        await updateOrCreateSession({ sessionId: "session-1", checks: { otpEmail } } as any);
+
+        const [command] = cookieHelpers.createSessionAndUpdateCookie.mock.calls[0];
+        expect(command.checks.otpEmail).toEqual(expect.objectContaining(otpEmail));
+        expect(command.checks.user.$typeName).toBe("zitadel.session.v2.CheckUser");
+        expect(command.checks.user.search).toEqual({ case: "userId", value: "user-1" });
+      });
+
+      test("answers with a translated error instead of throwing when ZITADEL rejects the code", async () => {
+        cookieHelpers.createSessionAndUpdateCookie.mockRejectedValue({ code: Code.NotFound, isUserError: true });
+
+        await expect(updateOrCreateSession({ sessionId: "session-1", checks: { otpEmail } } as any)).resolves.toEqual({
+          error: "couldNotVerifyCode",
+        });
+      });
+
+      test("still throws errors that are not caused by the user", async () => {
+        cookieHelpers.createSessionAndUpdateCookie.mockRejectedValue({ code: Code.Internal, isUserError: false });
+
+        await expect(updateOrCreateSession({ sessionId: "session-1", checks: { otpEmail } } as any)).rejects.toEqual({
+          code: Code.Internal,
+          isUserError: false,
+        });
+      });
+    });
   });
 });
