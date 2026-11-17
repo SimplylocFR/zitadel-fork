@@ -89,8 +89,11 @@ export default async function Page(props: {
             searchParams={searchParams}
             returnTo={`/otp/${method}?${new URLSearchParams(
               Object.fromEntries(
-                Object.entries({ loginName, sessionId, requestId, organization, code }).filter(([, v]) => v != null) as [string, string][]
-              )
+                Object.entries({ loginName, sessionId, requestId, organization, code }).filter(([, v]) => v != null) as [
+                  string,
+                  string,
+                ][],
+              ),
             )}`}
           ></UserAvatar>
         )}

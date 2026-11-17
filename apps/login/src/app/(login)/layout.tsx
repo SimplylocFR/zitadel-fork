@@ -42,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Tooltip.Provider>
             <Suspense
               fallback={
-                <BackgroundWrapper className="bg-white dark:bg-[#171717] relative flex min-h-screen flex-col justify-center">
+                <BackgroundWrapper className="relative flex min-h-screen flex-col justify-center bg-white dark:bg-[#171717]">
                   <div className="relative mx-auto w-full max-w-[440px] py-8">
                     <Skeleton>
                       <div className="h-40"></div>
@@ -52,10 +52,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               }
             >
               <LanguageProvider>
-                <BackgroundWrapper className="relative flex min-h-screen flex-col bg-white dark:bg-[#171717] md:flex-row">
+                <BackgroundWrapper className="relative flex min-h-screen flex-col bg-white md:flex-row dark:bg-[#171717]">
                   {/* Left column: header + form */}
                   <div className="flex min-h-screen w-full flex-col md:w-1/2">
-                    <header className="flex w-full items-center justify-center px-6 pb-4 pt-16 md:px-10 md:pt-24">
+                    <header className="flex w-full items-center justify-center px-6 pt-16 pb-4 md:px-10 md:pt-24">
                       <a href="https://simplyloc.fr" className="inline-flex items-center">
                         <img
                           src={`${basePath}/simplyloc/logo.png`}
@@ -65,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                         />
                       </a>
                     </header>
-                    <div className="flex flex-1 items-start justify-center px-4 pb-8 pt-2 md:px-8">
+                    <div className="flex flex-1 items-start justify-center px-4 pt-2 pb-8 md:px-8">
                       <div className="w-full max-w-[1100px]">{children}</div>
                     </div>
                   </div>
