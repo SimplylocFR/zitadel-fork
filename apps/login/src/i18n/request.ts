@@ -83,8 +83,11 @@ export default getRequestConfig(async () => {
 
   const fallbackMessages = (await import(`../../locales/${fallback}.json`)).default;
 
+  // SimplyLoc: the bundled locales win over the hosted translations. Since ZITADEL v4.20 the API
+  // also serves its own default texts, which would overwrite the SimplyLoc wording kept in
+  // locales/*.json (an empty text there cannot even be expressed through the API).
   return {
     locale,
-    messages: mergeMessages(fallbackMessages, localeMessages, customMessages) as Record<string, string>,
+    messages: mergeMessages(fallbackMessages, customMessages, localeMessages) as Record<string, string>,
   };
 });
