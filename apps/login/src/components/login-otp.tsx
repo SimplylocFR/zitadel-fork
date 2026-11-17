@@ -18,14 +18,26 @@ import { Button, ButtonVariants } from "./button";
 import { Spinner } from "./spinner";
 import { Translated } from "./translated";
 
+// Zitadel email/SMS OTP codes have 8 digits, authenticator-app (TOTP) codes have 6.
 const OTP_LENGTH = 8;
+const TOTP_LENGTH = 6;
 
-function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void; disabled?: boolean }) {
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+function OtpInput({
+  length,
+  onChange,
+  onComplete,
+  disabled,
+}: {
+  length: number;
+  onChange: (code: string) => void;
+  onComplete: (code: string) => void;
+  disabled?: boolean;
+}) {
+  const [digits, setDigits] = useState<string[]>(Array(length).fill(""));
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
   function focus(i: number) {
-    inputs.current[Math.max(0, Math.min(OTP_LENGTH - 1, i))]?.focus();
+    inputs.current[Math.max(0, Math.min(length - 1, i))]?.focus();
   }
 
   function handleChange(i: number, val: string) {
@@ -34,8 +46,9 @@ function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void
     const next = [...digits];
     next[i] = digit;
     setDigits(next);
+    onChange(next.join(""));
     if (digit) {
-      if (i < OTP_LENGTH - 1) focus(i + 1);
+      if (i < length - 1) focus(i + 1);
       if (next.every(Boolean)) onComplete(next.join(""));
     }
   }
@@ -46,6 +59,7 @@ function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void
         const next = [...digits];
         next[i] = "";
         setDigits(next);
+        onChange(next.join(""));
       } else {
         focus(i - 1);
       }
@@ -58,13 +72,16 @@ function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void
 
   function handlePaste(e: React.ClipboardEvent) {
     e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
     if (!pasted) return;
     const next = [...digits];
-    pasted.split("").forEach((c, idx) => { next[idx] = c; });
+    pasted.split("").forEach((c, idx) => {
+      next[idx] = c;
+    });
     setDigits(next);
-    focus(Math.min(pasted.length, OTP_LENGTH - 1));
-    if (pasted.length === OTP_LENGTH) onComplete(pasted);
+    onChange(next.join(""));
+    focus(Math.min(pasted.length, length - 1));
+    if (pasted.length === length) onComplete(pasted);
   }
 
   return (
@@ -72,7 +89,9 @@ function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void
       {digits.map((d, i) => (
         <input
           key={i}
-          ref={(el) => { inputs.current[i] = el; }}
+          ref={(el) => {
+            inputs.current[i] = el;
+          }}
           type="text"
           inputMode="numeric"
           maxLength={1}
@@ -85,7 +104,7 @@ function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
           disabled={disabled}
-          className={`h-12 w-9 rounded-xl border text-center text-lg font-semibold shadow-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[rgb(157,56,59)] sm:h-14 sm:w-11 sm:text-xl ${disabled ? "animate-pulse cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400" : "border-gray-300 bg-white text-gray-900"}`}
+          className={`h-12 w-9 rounded-xl border text-center text-lg font-semibold shadow-sm transition-all focus:border-transparent focus:ring-2 focus:ring-[rgb(157,56,59)] focus:outline-none sm:h-14 sm:w-11 sm:text-xl ${disabled ? "animate-pulse cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400" : "border-gray-300 bg-white text-gray-900"}`}
         />
       ))}
     </div>
@@ -109,6 +128,8 @@ type Inputs = {
 
 export function LoginOTP({ loginName, sessionId, requestId, organization, method, code, loginSettings }: Props) {
   const t = useTranslations("otp");
+  const otpLength = method === "time-based" ? TOTP_LENGTH : OTP_LENGTH;
+  const [typedCode, setTypedCode] = useState("");
 
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -309,6 +330,8 @@ export function LoginOTP({ loginName, sessionId, requestId, organization, method
         )}
         <div className="mt-4">
           <OtpInput
+            length={otpLength}
+            onChange={setTypedCode}
             disabled={loading}
             onComplete={(code) => {
               handleSubmit(() => setCodeAndContinue({ code }))();
@@ -330,7 +353,7 @@ export function LoginOTP({ loginName, sessionId, requestId, organization, method
             className="self-end"
             variant={ButtonVariants.Primary}
             disabled={loading}
-            onClick={handleSubmit(setCodeAndContinue)}
+            onClick={handleSubmit(() => setCodeAndContinue({ code: typedCode || code || "" }))}
             data-testid="submit-button"
           >
             {loading && <Spinner className="mr-2 h-5 w-5" />} <Translated i18nKey="verify.submit" namespace="otp" />

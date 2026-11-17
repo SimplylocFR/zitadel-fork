@@ -35,20 +35,65 @@ describe("LoginOTP", () => {
     expect(getByTestId("code-text-input")).toHaveFocus();
   });
 
+  const cell = (i: number) => screen.getByTestId(i === 0 ? "code-text-input" : `code-text-input-${i}`);
+  const type = (digits: string) => digits.split("").forEach((d, i) => fireEvent.change(cell(i), { target: { value: d } }));
+
+  test("should render one cell per digit: 6 for a TOTP code, 8 for an email code", () => {
+    const { unmount } = render(<LoginOTP method="time-based" />);
+    expect(document.querySelectorAll("input[data-testid^='code-text-input']")).toHaveLength(6);
+    unmount();
+
+    mockUpdateOrCreateSession.mockResolvedValue({});
+    render(<LoginOTP method="email" />);
+    expect(document.querySelectorAll("input[data-testid^='code-text-input']")).toHaveLength(8);
+  });
+
   test("should display translated fallback error when OTP verification request rejects", async () => {
     mockUpdateOrCreateSession.mockRejectedValueOnce(new Error("network down"));
 
     render(<LoginOTP method="time-based" />);
 
-    // the code input is one cell per digit; completing the last cell submits the code
-    "12345678".split("").forEach((digit, i) => {
-      const cell = screen.getByTestId(i === 0 ? "code-text-input" : `code-text-input-${i}`);
-      fireEvent.change(cell, { target: { value: digit } });
-    });
+    // completing the last cell submits the code
+    type("123456");
 
     await waitFor(() => {
       expect(screen.getByText("errors.couldNotVerifyCode")).toBeInTheDocument();
     });
+  });
+
+  test("should submit the TOTP code once its 6 digits are typed", async () => {
+    mockUpdateOrCreateSession.mockResolvedValue({});
+
+    render(<LoginOTP method="time-based" loginName="user@example.com" />);
+    type("654321");
+
+    await waitFor(() => expect(mockUpdateOrCreateSession).toHaveBeenCalledTimes(1));
+    expect(mockUpdateOrCreateSession.mock.calls[0][0].checks.totp.code).toBe("654321");
+  });
+
+  test("should submit the typed code, not an empty one, when the submit button is used", async () => {
+    mockUpdateOrCreateSession.mockResolvedValue({});
+
+    render(<LoginOTP method="email" loginName="user@example.com" code="" />);
+    await waitFor(() => expect(mockUpdateOrCreateSession).toHaveBeenCalledTimes(1)); // email challenge request
+    mockUpdateOrCreateSession.mockClear();
+
+    type("1234"); // incomplete: no automatic submission
+    expect(mockUpdateOrCreateSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("submit-button"));
+
+    await waitFor(() => expect(mockUpdateOrCreateSession).toHaveBeenCalledTimes(1));
+    expect(mockUpdateOrCreateSession.mock.calls[0][0].checks.otpEmail.code).toBe("1234");
+  });
+
+  test("should fall back to the code from the email link when nothing is typed", async () => {
+    mockUpdateOrCreateSession.mockResolvedValue({});
+
+    render(<LoginOTP method="email" loginName="user@example.com" code="87654321" />);
+    fireEvent.click(screen.getByTestId("submit-button"));
+
+    await waitFor(() => expect(mockUpdateOrCreateSession).toHaveBeenCalledTimes(1));
+    expect(mockUpdateOrCreateSession.mock.calls[0][0].checks.otpEmail.code).toBe("87654321");
   });
 
   test("should display translated fallback error when OTP challenge request rejects", async () => {
