@@ -13,9 +13,6 @@
     "createNewSessionForLDAP",
     "redirectToIdp"
   ],
-  "src/lib/actions/language.ts": [
-    "setLanguageCookie"
-  ],
   "src/lib/actions/loginname.ts": [
     "sendLoginname"
   ],

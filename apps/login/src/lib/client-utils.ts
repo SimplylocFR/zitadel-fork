@@ -81,7 +81,7 @@ export function isAllowedPostErrorRedirectUrl(url: string | undefined): url is "
  * URL, protocol-relative path, other login pages) must be rejected.
  */
 export function isAllowedAccountsReturnTo(url: string | undefined): url is string {
-  return typeof url === "string" && /^\/otp\/[a-z-]+(\?[^#\\]*)?$/.test(url);
+  return typeof url === "string" && /^\/otp\/[a-z-]+(\?[^#\\\s]*)?$/.test(url);
 }
 
 /**

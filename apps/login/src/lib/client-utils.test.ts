@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { isAllowedPostErrorRedirectUrl, isExternalUrl, isSafeRedirectUri } from "./client-utils";
+import { isAllowedAccountsReturnTo, isAllowedPostErrorRedirectUrl, isExternalUrl, isSafeRedirectUri } from "./client-utils";
 
 describe("isSafeRedirectUri", () => {
   beforeEach(() => {
@@ -95,5 +95,38 @@ describe("isAllowedPostErrorRedirectUrl", () => {
     "/LOGINNAME",
   ])("rejects %s", (url) => {
     expect(isAllowedPostErrorRedirectUrl(url)).toBe(false);
+  });
+});
+
+describe("isAllowedAccountsReturnTo", () => {
+  test.each(["/otp/email", "/otp/sms", "/otp/time-based", "/otp/email?loginName=a%40b.c&sessionId=1&requestId=V2_1"])(
+    "accepts %s",
+    (url) => {
+      expect(isAllowedAccountsReturnTo(url)).toBe(true);
+    },
+  );
+
+  test.each([
+    "https://evil.example",
+    "//evil.example",
+    "/\\evil.example",
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "",
+    undefined,
+    "/loginname",
+    "/otp",
+    "/otp/",
+    "/otp/email/x",
+    "/otp/email#frag",
+    "/otp/email?x=\\evil",
+    "/otp/email?x=1\n2",
+    "/otp/email?x=1 2",
+    "/otp/../loginname",
+    " /otp/email",
+    "/OTP/email",
+    "/otp/Email",
+  ])("rejects %s", (url) => {
+    expect(isAllowedAccountsReturnTo(url)).toBe(false);
   });
 });

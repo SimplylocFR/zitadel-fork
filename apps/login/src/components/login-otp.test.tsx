@@ -40,15 +40,11 @@ describe("LoginOTP", () => {
 
     render(<LoginOTP method="time-based" />);
 
-    const input = screen.getByTestId("code-text-input");
-    fireEvent.change(input, { target: { value: "123456" } });
-
-    const submitButton = screen.getByTestId("submit-button");
-    await waitFor(() => {
-      expect(submitButton).not.toBeDisabled();
+    // the code input is one cell per digit; completing the last cell submits the code
+    "12345678".split("").forEach((digit, i) => {
+      const cell = screen.getByTestId(i === 0 ? "code-text-input" : `code-text-input-${i}`);
+      fireEvent.change(cell, { target: { value: digit } });
     });
-
-    fireEvent.click(submitButton);
 
     await waitFor(() => {
       expect(screen.getByText("errors.couldNotVerifyCode")).toBeInTheDocument();

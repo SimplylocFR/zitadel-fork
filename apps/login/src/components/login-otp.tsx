@@ -77,6 +77,7 @@ function OtpInput({ onComplete, disabled }: { onComplete: (code: string) => void
           inputMode="numeric"
           maxLength={1}
           value={d}
+          data-testid={i === 0 ? "code-text-input" : `code-text-input-${i}`}
           autoFocus={i === 0}
           autoComplete={i === 0 ? "one-time-code" : "off"}
           onChange={(e) => handleChange(i, e.target.value)}

@@ -575,7 +575,28 @@ describe("sendLoginname", () => {
         });
       });
 
-      test("should redirect to IDP when no passkey but IDP available", async () => {
+      // SimplyLoc: a user with both a password and a single IDP link sees the password form first
+      // (the password page offers the linked IDP as an alternative).
+      test("should show the password form when user has a password and a single IDP link", async () => {
+        mockListAuthenticationMethodTypes.mockResolvedValue({
+          authMethodTypes: [AuthenticationMethodType.PASSWORD, AuthenticationMethodType.IDP],
+        });
+        mockListIDPLinks.mockResolvedValue({
+          result: [{ idpId: "idp123" }],
+        });
+        mockStartIdentityProviderFlow.mockResolvedValue({ url: "https://idp.example.com/auth" });
+
+        const result = await sendLoginname({
+          loginName: "user@example.com",
+        });
+
+        expect(mockStartIdentityProviderFlow).not.toHaveBeenCalled();
+        expect(result).toHaveProperty("redirect");
+        expect((result as any).redirect).toMatch(/^\/password\?/);
+      });
+
+      test("should redirect to the IDP when local authentication is not allowed and there is a single IDP link", async () => {
+        mockGetLoginSettings.mockResolvedValue({ allowLocalAuthentication: false });
         mockListAuthenticationMethodTypes.mockResolvedValue({
           authMethodTypes: [AuthenticationMethodType.PASSWORD, AuthenticationMethodType.IDP],
         });

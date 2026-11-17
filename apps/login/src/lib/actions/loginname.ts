@@ -565,7 +565,6 @@ export async function sendLoginname(command: SendLoginnameCommand) {
           error: t("errors.localAuthenticationNotAllowed"),
         };
       }
-      }
     }
   }
 

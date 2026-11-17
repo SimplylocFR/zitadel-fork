@@ -1,6 +1,10 @@
-import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TextInput } from "./input";
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+}));
 
 describe("TextInput Component", () => {
   const originalEnv = process.env;
@@ -189,6 +193,36 @@ describe("TextInput Component", () => {
       const { container } = render(<TextInput label="UniqueRequiredField" required />);
       const label = container.querySelector("label");
       expect(label?.textContent).toContain("*");
+    });
+  });
+
+  describe("Password visibility toggle", () => {
+    afterEach(cleanup);
+
+    it("should not render a toggle for non-password inputs", () => {
+      render(<TextInput label="Email" type="email" />);
+      expect(screen.queryByRole("button")).toBeNull();
+    });
+
+    it("should reveal and hide a password input", () => {
+      const { container } = render(<TextInput label="Password" type="password" />);
+      const input = container.querySelector("input") as HTMLInputElement;
+      const toggle = screen.getByRole("button", { name: "showPassword" });
+
+      expect(input.type).toBe("password");
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+
+      fireEvent.click(toggle);
+      expect(input.type).toBe("text");
+      expect(screen.getByRole("button", { name: "hidePassword" }).getAttribute("aria-pressed")).toBe("true");
+
+      fireEvent.click(screen.getByRole("button", { name: "hidePassword" }));
+      expect(input.type).toBe("password");
+    });
+
+    it("should disable the toggle when the input is disabled", () => {
+      render(<TextInput label="Password" type="password" disabled />);
+      expect((screen.getByRole("button", { name: "showPassword" }) as HTMLButtonElement).disabled).toBe(true);
     });
   });
 });
